@@ -56,7 +56,10 @@
 #include <android-base/stringprintf.h>
 #include <android-base/strings.h>
 #include <sparse/sparse.h>
-#include <ziparchive/zip_archive.h>
+
+// ziparchive patches
+#include <ziparchive/zip_archive.h> // this one sucks with RUU's
+#include "zip/zip.h"
 
 #include "bootimg_utils.h"
 #include "diagnose_usb.h"
@@ -184,7 +187,6 @@ static void* load_fd(int fd, int64_t* sz) {
     return data;
 
 oops:
-	fprintf(stderr, "%s FAIL %s\n", __func__, strerror(errno));
     errno_tmp = errno;
     close(fd);
     if(data != 0) free(data);
@@ -252,7 +254,6 @@ static int list_devices_callback(usb_ifc_info* info) {
 static Transport* transport = nullptr;
 
 static Transport* open_device() {
-
     bool announce = true;
 
     if (transport != nullptr) {
@@ -818,10 +819,11 @@ static bool needs_erase(Transport* transport, const char* partition) {
     return partition_type == "ext4";
 }
 
-static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
+static int check_htc_zip_format(int fd, const char* fname, __attribute__((__unused__)) const char* pname) {
 	htc_largezip_header_t hdr;
 
 	DEBUG("Detect HTC largezip...");
+
 	if (htc_largezip_read_header(fd, &hdr)) {
 		fprintf(stderr, " found largezip\n");
 		return FB_BUFFER_HTC_LARGEZIP;
@@ -829,6 +831,8 @@ static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
 	else {
 		size_t r;
 		char pk[2];
+		int err;
+		int f;
 
 		DEBUG("Nope\n");
 		DEBUG("Detect HTC multizip...");
@@ -836,16 +840,38 @@ static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
 		r = read(fd, pk, 2);
 		lseek(fd, 0x00, SEEK_SET);
 		if (strncmp(pk, "PK", 2) != 0 || r != 2) {
-			DEBUG("Nope, found non-zip / encrypted zip...\n");
+			DEBUG("Nope\nFound non-zip / encrypted zip...\n");
 			return 0;
 		}
 
-	    ZipArchiveHandle zip;
+		struct zip *ziparchive;
+
+		if ((ziparchive = zip_open(fname, 0, &err)) == NULL) {
+	        DEBUG("\nfailed to open zip file '%s'\n", fname);
+	        return -1;
+		}
+
+		f = zip_name_locate(ziparchive, "info.bin", 0);
+		if (f >= 0) {
+			DEBUG(" found multizip\n");
+			zip_close(ziparchive);
+			return FB_BUFFER_HTC_MULTIZIP;
+		}
+
+		zip_close(ziparchive);
+		DEBUG("Nope\n");
+
+		return -1;
+
+
+/*
+		ZipArchiveHandle zip;
+		DEBUG("WTF PNAME %s\n", pname);
 	    int error = OpenArchiveFd(fd, pname, &zip);
 	    if (error != 0) {
 	        CloseArchive(zip);
-	        DEBUG("\nfailed to open zip file '%s': %s", fname, ErrorCodeString(error));
-	        return 0;
+	        DEBUG("\nfailed to open zip file '%s': %s\n", fname, ErrorCodeString(error));
+	        return -1;
 	    }
 
 	    ZipEntry zip_entry;
@@ -854,16 +880,20 @@ static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
 			fprintf(stderr, " found multizip\n");
 			CloseArchive(zip);
 			return FB_BUFFER_HTC_MULTIZIP;
+
 		}
-		DEBUG("Nope\n");
+*/
+
 
 #if 0
+debug_zip:
 		int iter;
 		void *cookie;
 		ZipEntry entry;
 		ZipString name;
 		char filename[256];
 //				unzip_file(ZipArchiveHandle zip, const char* entry_name, int64_t* sz)
+		DEBUG("IN ZIP DEBUGGING\n");
 		iter = StartIteration(zip, &cookie, nullptr, nullptr);
 		int64_t sz;
 		void *data;
@@ -883,7 +913,8 @@ static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
 
 		EndIteration(cookie);
 #endif
-		CloseArchive(zip);
+
+//		CloseArchive(zip);
 		DEBUG("Found normal zip...\n");
 		return 0;
 
@@ -895,7 +926,6 @@ static int check_htc_zip_format(int fd, const char* fname, const char* pname) {
 static bool load_buf_fd(Transport* transport, int fd, struct fastboot_buffer* buf, const char* fname, const char* pname) {
     int64_t sz = get_file_size(fd);
     int special_zip = 0;
-
     if (sz == -1) {
         return false;
     }
@@ -904,33 +934,36 @@ static bool load_buf_fd(Transport* transport, int fd, struct fastboot_buffer* bu
 
     if (pname != nullptr && strcmp(pname, "zip") == 0) {
     	special_zip = check_htc_zip_format(fd, fname, pname);
+    	if (special_zip == -1) return false; // zip failure
     }
 
     lseek64(fd, 0, SEEK_SET);
     fd = open(fname, O_RDONLY | O_BINARY); // FIXME later, fd dies somewhere
 
     if (special_zip == 0) {
-		int64_t limit = get_sparse_limit(transport, sz);
-		if (limit) {
-			sparse_file** s = load_sparse_files(fd, limit);
-			if (s == nullptr) {
-				return false;
-			}
-			buf->type = FB_BUFFER_SPARSE;
-			buf->data = s;
-		} else {
-			void* data = load_fd(fd, &sz);
-			if (data == nullptr) return -1;
-			buf->type = FB_BUFFER;
-			buf->data = data;
-			buf->sz = sz;
-		}
+        int64_t limit = get_sparse_limit(transport, sz);
+        if (limit) {
+            sparse_file** s = load_sparse_files(fd, limit);
+            if (s == nullptr) {
+                return false;
+            }
+            buf->type = FB_BUFFER_SPARSE;
+            buf->data = s;
+        } else {
+            void* data = load_fd(fd, &sz);
+            if (data == nullptr) return -1;
+            buf->type = FB_BUFFER;
+            buf->data = data;
+            buf->sz = sz;
+        }
     }
     else {
     	buf->type = (fb_buffer_type) special_zip;
     	buf->data = (void*) fname;
     	return true;
     }
+
+
 
     return true;
 }
@@ -973,7 +1006,6 @@ static void flash_buf(const char *pname, struct fastboot_buffer *buf)
         case FB_BUFFER_HTC_MULTIZIP:
         	fb_queue_flash_multizip((const char*) buf->data);
             break;
-
         default:
             die("unknown buffer type: %d", buf->type);
     }
@@ -1358,20 +1390,17 @@ static int do_bypass_unlock_command(int argc, char **argv)
     return 0;
 }
 
-static int do_oem_command(int argc, char **argv)
-{
-    char command[256];
+static int do_oem_command(int argc, char** argv) {
     if (argc <= 1) return 0;
 
-    command[0] = 0;
-    while(1) {
-        strcat(command,*argv);
+    std::string command;
+    while (argc > 0) {
+        command += *argv;
         skip(1);
-        if(argc == 0) break;
-        strcat(command," ");
+        if (argc != 0) command += " ";
     }
 
-    fb_queue_command(command,"");
+    fb_queue_command(command.c_str(), "");
     return 0;
 }
 
@@ -1651,7 +1680,7 @@ int main(int argc, char **argv)
                 setvbuf(stdout, nullptr, _IONBF, 0);
                 setvbuf(stderr, nullptr, _IONBF, 0);
             } else if (strcmp("version", longopts[longindex].name) == 0) {
-                fprintf(stdout, "thc_fastboot version %s/%s\n", FASTBOOT_REVISION, THC_PATCH_VERSION);
+                fprintf(stdout, "fastboot version %s/%s\n", FASTBOOT_REVISION, THC_PATCH_VERSION);
                 return 0;
             } else if (strcmp("slot", longopts[longindex].name) == 0) {
                 slot_override = std::string(optarg);

@@ -52,7 +52,6 @@ const std::string fb_get_error();
 /* engine.c - high level command queue engine */
 bool fb_getvar(Transport* transport, const std::string& key, std::string* value);
 void fb_queue_flash(const char *ptn, void *data, uint32_t sz);
-void fb_queue_flash_zip(const char *ptn, void *data, uint32_t sz);
 void fb_queue_flash_largezip(const char *fname);
 void fb_queue_flash_multizip(const char *pname);
 void fb_queue_flash_sparse(const char* ptn, struct sparse_file* s, uint32_t sz, size_t current,
@@ -82,7 +81,6 @@ __attribute__((__noreturn__)) void die(const char *fmt, ...);
 /* Current product */
 extern char cur_product[FB_RESPONSE_SZ + 1];
 
-
 #define DEBUG_ENABLED
 
 #ifdef DEBUG_ENABLED
@@ -91,6 +89,6 @@ extern char cur_product[FB_RESPONSE_SZ + 1];
 #define DEBUG(...) ((void)0)
 #endif
 
-#define THC_PATCH_VERSION "THC 0.1"
+#define THC_PATCH_VERSION "THC 0.2 (-b android-8.0.0_r3)"
 
 #endif

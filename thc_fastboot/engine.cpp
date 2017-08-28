@@ -48,8 +48,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <ziparchive/zip_archive.h>
+
+//#include <ziparchive/zip_archive.h>
 #include "htczip.h"
+#include "zip/zip.h"
 
 #define OP_DOWNLOAD   1
 #define OP_COMMAND    2
@@ -256,10 +258,9 @@ static int cb_reject(Action* a, int status, const char* resp) {
 }
 
 struct htc_zip {
-	int zip_type;
 	int current_flash;
 	int open_fd;
-	ZipArchiveHandle zip;
+	struct zip *ziparchive;
 	void *current_data;
 	htc_largezip_header_t largezip;
 };
@@ -380,6 +381,62 @@ void fb_queue_flash_largezip(const char *fname) {
 void fb_queue_flash_multizip(const char *fname) {
 	int error;
 	char zipname[256];
+	int pkg_index;
+
+	struct zip_stat sb;
+	struct zip_file *zf;
+
+	uint64_t zip_read_len;
+
+	if (zip_info.ziparchive == nullptr) {
+		if (fname == nullptr) die("Should not happen - fname nullptr @ %s\n", __func__);
+		zip_info.current_data = NULL;
+		zip_info.current_flash = 0;
+
+		if ((zip_info.ziparchive = zip_open(fname, 0, &error)) == NULL) {
+			printf("Failed to open %s\n", fname);
+			die("Failed to open zip file in %s", __func__);
+		}
+
+	}
+
+	memset(zipname, 0x00, 256);
+	snprintf(zipname, 255, "zip_%d.zip", zip_info.current_flash);
+
+	if (zip_info.current_data != NULL) {
+		free(zip_info.current_data);
+		zip_info.current_data = NULL;
+	}
+
+	pkg_index = zip_name_locate(zip_info.ziparchive, zipname, 0);
+	if (pkg_index < 0) {
+		DEBUG("Multizip finished\n");
+		zip_close(zip_info.ziparchive);
+		zip_info.ziparchive = nullptr;
+		return;
+	}
+
+	DEBUG("Unzipping %s @ %d\n", zipname, pkg_index);
+	zip_stat_index(zip_info.ziparchive, pkg_index, 0, &sb);
+
+	zf = zip_fopen_index(zip_info.ziparchive, pkg_index, 0);
+	if (!zf) die("Failed to open zip file");
+
+	zip_info.current_data = malloc(sb.size);
+	if (zip_info.current_data == NULL) die("out of mem!!");
+
+	zip_read_len = zip_fread(zf, zip_info.current_data, sb.size);
+	if (zip_read_len != sb.size) die("Failed to unzip_mem\n");
+
+	DEBUG("Successfully unpacked %lu bytes for %s\n", zip_read_len, zipname);
+
+	// flash
+	fb_queue_flash_zip(zipname, zip_info.current_data, sb.size, cb_multizip_check);
+}
+/*
+void fb_queue_flash_multizip(const char *fname) {
+	int error;
+	char zipname[256];
 	int64_t sz;
 
 	if (zip_info.open_fd == 0) {
@@ -411,6 +468,7 @@ void fb_queue_flash_multizip(const char *fname) {
 	}
 
 }
+*/
 
 void fb_queue_require(const char *prod, const char *var,
                       bool invert, size_t nvalues, const char **value)

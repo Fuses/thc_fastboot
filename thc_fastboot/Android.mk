@@ -14,6 +14,15 @@
 
 LOCAL_PATH:= $(call my-dir)
 
+include $(CLEAR_VARS)
+LOCAL_MODULE := libzip
+LOCAL_SRC_FILES := $(LOCAL_PATH)/lib64/libzip.a
+#include $(PREBUILT_STATIC_LIBRARY)
+LOCAL_MODULE_CLASS := STATIC_LIBRARIES
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_SUFFIX := .a
+include $(BUILD_PREBUILT)
+
 fastboot_version := $(shell git -C $(LOCAL_PATH) rev-parse --short=12 HEAD 2>/dev/null)-android
 
 include $(CLEAR_VARS)
@@ -37,7 +46,8 @@ LOCAL_SRC_FILES := \
 
 LOCAL_MODULE := thc_fastboot
 LOCAL_MODULE_TAGS := debug
-LOCAL_MODULE_HOST_OS := darwin linux windows
+#LOCAL_MODULE_HOST_OS := darwin linux windows
+LOCAL_MODULE_HOST_OS := linux
 LOCAL_CFLAGS += -Wall -Wextra -Werror -Wunreachable-code
 
 LOCAL_CFLAGS += -DFASTBOOT_REVISION='"$(fastboot_version)"'
@@ -75,6 +85,11 @@ LOCAL_REQUIRED_MODULES_linux := libf2fs_fmt_host_dyn
 # The following libf2fs_* are from system/extras/f2fs_utils,
 # and do not use code in external/f2fs-tools.
 LOCAL_STATIC_LIBRARIES_linux += libf2fs_utils_host libf2fs_ioutils_host libf2fs_dlutils_host
+
+#LOCAL_STATIC_LIBRARIES += libzip
+
+#fuck it
+LOCAL_LDFLAGS += -L$(LOCAL_PATH)/lib64 -lzip
 
 LOCAL_CXX_STL := libc++_static
 
