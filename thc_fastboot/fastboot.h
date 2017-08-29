@@ -80,7 +80,8 @@ __attribute__((__noreturn__)) void die(const char *fmt, ...);
 
 /* Current product */
 extern char cur_product[FB_RESPONSE_SZ + 1];
-
+extern int debug_print;
+/*
 #define DEBUG_ENABLED
 
 #ifdef DEBUG_ENABLED
@@ -88,7 +89,10 @@ extern char cur_product[FB_RESPONSE_SZ + 1];
 #else
 #define DEBUG(...) ((void)0)
 #endif
+*/
+#define DEBUG(...) if (debug_print) \
+					fprintf(stderr, "<DEBUG> " __VA_ARGS__);
 
-#define THC_PATCH_VERSION "THC 0.2 (-b android-8.0.0_r3)"
+#define THC_PATCH_VERSION "THC 0.2.1 (-b android-8.0.0_r3)"
 
 #endif

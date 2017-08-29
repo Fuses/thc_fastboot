@@ -76,6 +76,7 @@
 #endif
 
 char cur_product[FB_RESPONSE_SZ + 1];
+int debug_print = 0;
 
 static const char* serial = nullptr;
 static const char* product = nullptr;
@@ -431,6 +432,7 @@ static void usage() {
             "  --unbuffered                             Do not buffer input or output.\n"
             "  --version                                Display version.\n"
             "  -h, --help                               show this message.\n"
+    		"  -d, --ruudebug                           Enable RUU flash debugging\n"
         );
 }
 
@@ -1603,13 +1605,14 @@ int main(int argc, char **argv)
 #if !defined(_WIN32)
         {"wipe-and-use-fbe", no_argument, 0, 0},
 #endif
-        {0, 0, 0, 0}
+		{"ruudebug", no_argument, 0, 'd'},
+		{0, 0, 0, 0}
     };
 
     serial = getenv("ANDROID_SERIAL");
 
     while (1) {
-        int c = getopt_long(argc, argv, "wub:k:n:r:t:s:S:lp:c:i:m:ha::", longopts, &longindex);
+        int c = getopt_long(argc, argv, "wub:k:n:r:t:s:S:lp:c:i:m:ha::d", longopts, &longindex);
         if (c < 0) {
             break;
         }
@@ -1629,6 +1632,9 @@ int main(int argc, char **argv)
         case 'h':
             usage();
             return 1;
+        case 'd':
+        	debug_print = 1;
+        	break;
         case 'i': {
                 char *endptr = nullptr;
                 unsigned long val;
