@@ -93,6 +93,6 @@ extern int debug_print;
 #define DEBUG(...) if (debug_print) \
 					fprintf(stderr, "<DEBUG> " __VA_ARGS__);
 
-#define THC_PATCH_VERSION "THC 0.2.1 (-b android-8.0.0_r3)"
+#define THC_PATCH_VERSION "THC 0.2.2 (-b android-8.0.0_r3)"
 
 #endif

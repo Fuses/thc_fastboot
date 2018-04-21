@@ -862,67 +862,11 @@ static int check_htc_zip_format(int fd, const char* fname, __attribute__((__unus
 
 		zip_close(ziparchive);
 		DEBUG("Nope\n");
-
-		return -1;
-
-
-/*
-		ZipArchiveHandle zip;
-		DEBUG("WTF PNAME %s\n", pname);
-	    int error = OpenArchiveFd(fd, pname, &zip);
-	    if (error != 0) {
-	        CloseArchive(zip);
-	        DEBUG("\nfailed to open zip file '%s': %s\n", fname, ErrorCodeString(error));
-	        return -1;
-	    }
-
-	    ZipEntry zip_entry;
-	    ZipString zip_entry_name("info.bin");
-		if (FindEntry(zip, zip_entry_name, &zip_entry) == 0) {
-			fprintf(stderr, " found multizip\n");
-			CloseArchive(zip);
-			return FB_BUFFER_HTC_MULTIZIP;
-
-		}
-*/
-
-
-#if 0
-debug_zip:
-		int iter;
-		void *cookie;
-		ZipEntry entry;
-		ZipString name;
-		char filename[256];
-//				unzip_file(ZipArchiveHandle zip, const char* entry_name, int64_t* sz)
-		DEBUG("IN ZIP DEBUGGING\n");
-		iter = StartIteration(zip, &cookie, nullptr, nullptr);
-		int64_t sz;
-		void *data;
-		FILE *f;
-		while (Next(cookie, &entry, &name) == 0) {
-			memset(filename, 0x00, 256);
-			memcpy(filename, name.name, name.name_length);
-			fprintf(stderr, "FOUND %s\n", filename);
-			fflush(stderr);
-			data = unzip_file(zip, filename, &sz);
-			f = fopen(filename, "wb");
-			fwrite(data, 1, sz, f);
-			fclose(f);
-			free(data);
-
-		}
-
-		EndIteration(cookie);
-#endif
-
-//		CloseArchive(zip);
 		DEBUG("Found normal zip...\n");
 		return 0;
-
 	}
 
-	return 0;
+	return -1;
 }
 
 static bool load_buf_fd(Transport* transport, int fd, struct fastboot_buffer* buf, const char* fname, const char* pname) {
